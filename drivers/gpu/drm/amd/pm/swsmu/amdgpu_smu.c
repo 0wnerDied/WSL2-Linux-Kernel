@@ -1257,7 +1257,6 @@ static int smu_sw_init(void *handle)
 	atomic_set(&smu->smu_power.power_gate.vpe_gated, 1);
 	atomic_set(&smu->smu_power.power_gate.umsch_mm_gated, 1);
 
-	smu->workload_mask = 1 << smu->workload_prority[PP_SMC_POWER_PROFILE_BOOTUP_DEFAULT];
 	smu->workload_prority[PP_SMC_POWER_PROFILE_BOOTUP_DEFAULT] = 0;
 	smu->workload_prority[PP_SMC_POWER_PROFILE_FULLSCREEN3D] = 1;
 	smu->workload_prority[PP_SMC_POWER_PROFILE_POWERSAVING] = 2;
@@ -1265,6 +1264,11 @@ static int smu_sw_init(void *handle)
 	smu->workload_prority[PP_SMC_POWER_PROFILE_VR] = 4;
 	smu->workload_prority[PP_SMC_POWER_PROFILE_COMPUTE] = 5;
 	smu->workload_prority[PP_SMC_POWER_PROFILE_CUSTOM] = 6;
+
+	if (smu->is_apu)
+		smu->workload_mask = 1 << smu->workload_prority[PP_SMC_POWER_PROFILE_BOOTUP_DEFAULT];
+	else
+		smu->workload_mask = 1 << smu->workload_prority[PP_SMC_POWER_PROFILE_FULLSCREEN3D];
 
 	smu->workload_setting[0] = PP_SMC_POWER_PROFILE_BOOTUP_DEFAULT;
 	smu->workload_setting[1] = PP_SMC_POWER_PROFILE_FULLSCREEN3D;
@@ -2762,7 +2766,10 @@ int smu_get_power_limit(void *handle,
 			*limit = smu->max_power_limit;
 			break;
 		case SMU_PPT_LIMIT_MIN:
-			*limit = smu->min_power_limit;
+			if (amdgpu_ignore_min_pcap)
+				*limit = 0;
+			else
+				*limit = smu->min_power_limit;
 			break;
 		default:
 			return -EINVAL;
@@ -2786,7 +2793,14 @@ static int smu_set_power_limit(void *handle, uint32_t limit)
 		if (smu->ppt_funcs->set_power_limit)
 			return smu->ppt_funcs->set_power_limit(smu, limit_type, limit);
 
-	if ((limit > smu->max_power_limit) || (limit < smu->min_power_limit)) {
+	if (amdgpu_ignore_min_pcap) {
+		if ((limit > smu->max_power_limit)) {
+			dev_err(smu->adev->dev,
+				"New power limit (%d) is over the max allowed %d\n",
+				limit, smu->max_power_limit);
+			return -EINVAL;
+		}
+	} else if ((limit > smu->max_power_limit) || (limit < smu->min_power_limit)) {
 		dev_err(smu->adev->dev,
 			"New power limit (%d) is out of range [%d,%d]\n",
 			limit, smu->min_power_limit, smu->max_power_limit);

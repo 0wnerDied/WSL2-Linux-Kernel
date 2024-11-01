@@ -5,6 +5,10 @@
 #ifndef _KERNEL_SCHED_SCHED_H
 #define _KERNEL_SCHED_SCHED_H
 
+#ifdef CONFIG_SCHED_ALT
+#include "alt_sched.h"
+#else
+
 #include <linux/sched/affinity.h>
 #include <linux/sched/autogroup.h>
 #include <linux/sched/cpufreq.h>
@@ -2591,7 +2595,7 @@ extern void deactivate_task(struct rq *rq, struct task_struct *p, int flags);
 
 extern void wakeup_preempt(struct rq *rq, struct task_struct *p, int flags);
 
-#ifdef CONFIG_PREEMPT_RT
+#if defined(CONFIG_PREEMPT_RT) || defined(CONFIG_ZEN_INTERACTIVE)
 # define SCHED_NR_MIGRATE_BREAK 8
 #else
 # define SCHED_NR_MIGRATE_BREAK 32
@@ -3629,4 +3633,9 @@ static inline void balance_callbacks(struct rq *rq, struct balance_callback *hea
 
 #endif
 
+static inline int task_running_nice(struct task_struct *p)
+{
+	return (task_nice(p) > 0);
+}
+#endif /* !CONFIG_SCHED_ALT */
 #endif /* _KERNEL_SCHED_SCHED_H */
